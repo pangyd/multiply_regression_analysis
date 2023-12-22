@@ -1,0 +1,170 @@
+clc;
+clear;
+close all;
+warning off;
+%% 输入数据
+[~,~,data]=xlsread("D:\Users\Felix\Desktop\回归分析\论文\支持数据\after_preprocess.csv");
+[~,~,data1]=xlsread("D:\Users\Felix\Desktop\回归分析\论文\支持数据\缺失值处理后的数据.csv");
+data_num1=double(string(data1(2:end,2:15)));
+data_num=double(string(data));
+data_num=data_num(2:end,2:15);
+data_columns=string(data(1,2:end));
+%% 数据可视化
+% figure("Name","散点图矩阵")
+% plotmatrix(data_num)
+% figure("Name","相关矩阵")
+% heatmap(corr(data_num))
+% figure(3);
+% boxplot(data_num)
+% title("十二个变量的箱线图")
+axis equal;
+subplot(131);
+qqplot(data_num(:,end));
+subplot(132);
+qqplot(data_num1(:,end));
+subplot(133);
+[yn,lambda] = boxcox(data_num1(:,end));
+qqplot(yn)
+%% 转换数据
+%clc;
+x=data_num(:,1:13);
+y=data_num(:,end);
+%y=(exp(data_num(:,14)).^lambda-1)./lambda;
+SST=sum((y-mean(y)).^2);
+iloc=[1 2 4 5 6 8 9 10 11 12 13];
+n=length(y);
+p=length(iloc);
+%% 逐步回归的残差图
+%clc;
+%这里是做SSE(X2|X1)与SSE(Y|X1)
+%的残差图的 一共进行p次逐步回归的迭代，则会有p个残差图
+data_error=[];
+iloc_stepwise=[13 11 6 1 12 8 5 4 9 10 2];
+%iloc_stepwise=[13 11 6 1 12 8 5 4];
+p=length(iloc_stepwise);
+for i=1:length(iloc_stepwise)
+    [b,bint,r] = regress(y,x(:,iloc_stepwise(1:i)));
+    data_error(:,i)=r;
+end
+r=data_error;
+for i=1:size(data_error,2)
+    if(i==size(data_error,2))
+        break;
+    end
+    y_pred0=r(:,i)+y;
+    y_pred1=r(:,i+1)+y;
+    % SSR0=sum((y_pred0-mean(y)).^2);
+    % SSR1=sum((y_pred1-mean(y)).^2);
+    % SSE_new=SSR1-SSR0;%这里就是SSE(X_new|X_old)
+    % SSE=sum((y_pred0-y).^2)%这里是SSE(Y|X_old)
+    SSR0=(y_pred0-mean(y));
+    SSR1=(y_pred1-mean(y));
+    SSE_new(:,i)=SSR1-SSR0;
+    SSE=r(:,i);
+end
+figure("name","逐步回归的残差图")
+for i=1:10
+    [b,bint,r1]=regress(SSE_new(:,i),[ones(n,1),r(:,i)]);
+    fprintf("第%d次逐步回归的MSE为：%f\n",[i,sum(r1.^2)/(n-i-1)])
+    subplot(5,2,i);
+    plot(r(:,i),[ones(n,1),r(:,i)]*bint,'b:');
+    hold on;
+    scatter(r(:,i),SSE_new(:,i),'r.');
+    title("第"+i+"次逐步回归中对"+data_columns(iloc_stepwise(i+1))+"作加变量图")
+    
+end
+%% 变量筛选后的回归
+clc;
+
+
+x1=x(:,iloc_stepwise);
+[b,bint,r,rint,stats] = regress(y,[ones(n,1),x1]);
+%SSE=sum(r.^2)
+fprintf("筛选变量之后的回归方程R方为：%2.3f\n",[stats(1)])
+fprintf("筛选变量之后的回归方程调整R方为：%2.3f\n",[1-((n-1)/(n-p-1))*(1-stats(1))])
+%% 变量多重共线性检验（VIF）
+clc;
+VIF=[];
+for i=1:size(x1,2)-1
+    VIF(i)=VIF_fun(x1,i);
+end
+fprintf("x的方差扩大因子为:\n")
+disp(VIF);
+fprintf("x的方差扩大因子的最大值为:%.4f.\n",max(VIF))
+fprintf("x的方差扩大因子的均值为:%.4f.\n",mean(VIF))
+figure("Name","相关矩阵")
+heatmap(corr(data_num))
+%% F检验 (F Test)
+clc;
+SST=sum((y-mean(y)).^2);
+SSE=sum(r.^2);
+SSR=SST-SSE;
+F_test=(SSE/(n-1))/(SSR/(n-p-1));
+fprintf("该模型的F统计量为:%f\n",F_test);
+if(F_test<finv(0.95,n-1,n-p-1))
+    fprintf("通过F检验\n")
+else
+    fprintf("不通过F检验\n")
+end
+%% 模型有效性检验
+%只看全部变量的回归结果是否有效
+[b,bint,r,rint,stats] = regress(y,[ones(n,1),x1]);
+[R2,Ra2] = R2_fun(y,x1(:,1:end));
+figure("name","输入变量-残差图");
+names=data_columns(iloc);
+for i=1:size(x1,2)
+    subplot(4,3,i);
+    scatter(x1(:,i),r,'.');
+    xlabel(names(i));
+    ylabel("r")
+end
+C=diag(inv([ones(n,1),x1]'*[ones(n,1),x1]));
+SSR=sum((y-mean(y)).^2)-sum(r.^2)
+m=size(x1,2);
+sigma=sqrt(SSR/(size(x1,1)-m));
+t=zeros(m-1,1);
+for i=1:(m-1)
+    t(i)=b(i+1)/(sqrt(C(i+1))*sigma);
+    p(i+1)=2*(1-tcdf(abs(t(i)),n-m));
+end
+fprintf("回归模型的估计系数t检验值为：\n")
+disp(t');
+fprintf("回归模型的估计系数t检验的p值为：\n")
+disp(p(2:end));
+%% 异方差性检验（DW-test）
+iloc_p = randperm(n,n);
+iloc1=iloc_p(1:round(size(x1,1)/2));
+iloc2=iloc_p(round(size(x1,1)/2):end);
+x11=x1(iloc1,:);
+x12=x1(iloc2,:);
+y1=y(iloc1);
+y2=y(iloc2);
+[b1,bint1,r1] = regress(y1,[ones(size(x11,1),1),x11]);
+[b2,bint2,r2] = regress(y2,[ones(size(x12,1),1),x12]);
+d1=abs(r1-mean(r1));
+d2=abs(r2-mean(r2));
+s_2=(sum((d1-mean(d1)).^2)+sum((d2-mean(d2)).^2))./(size(x1,1)-2);
+s=sqrt(s_2);
+t_bf=(mean(d1)-mean(d2))/s*sqrt(1/size(iloc1,2)+1/size(iloc2,2));
+fprintf("该模型的T_BF统计量为%4.6f\n",t_bf)
+if(abs(t_bf)>tinv(0.975,size(x1,1)-2))
+    disp("拟合模型存在异方差性");
+else
+    disp("拟合模型不存在异方差性");
+end
+%% 残差独立正态检验（Breush-Pagan Test）
+r_2=r.^2;
+y3=log(r_2)
+[b3,bint3,r3] = regress(y3,[ones(size(x1,1),1),x1]);
+SSR3=sum((y3-mean(y3)).^2)-sum(r3.^2);
+SSE3=sum(r3.^2);
+X_bp_2=(SSR3/2)/((SSE3/size(x1,1))^2)
+fprintf("该模型的X_Bp统计量为%4.6f\n",X_bp_2)
+if(X_bp_2>chi2inv(0.95,size(x1,2)))
+    disp("拟合模型的残差拒绝独立正态的假设")
+else
+    disp("拟合模型的残差独立正态的假设成立")
+end
+%该数据集重复数据较少 不能进行F lack of test 检验
+
+%% 交叉检验
