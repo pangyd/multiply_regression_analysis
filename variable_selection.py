@@ -7,6 +7,8 @@
 """
 import numpy as np
 import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
 import statsmodels.api as sm
 from sklearn.model_selection import train_test_split, cross_val_score, cross_validate, KFold
 from sklearn.preprocessing import StandardScaler
@@ -501,6 +503,14 @@ def main():
         logging.info("mse_mean={}".format(np.mean(score["test_mse"])))
         logging.info("mae_mean={}".format(np.mean(score["test_mae"])))
     """"""
+
+    # y变换前后的残差分布图
+    # x_origin = sm.add_constant(x_origin)
+    # model = sm.OLS(Y, x_origin).fit()
+    # plt.figure(figsize=(10, 6))
+    # sns.distplot(model.resid, color="navy")
+    # plt.title('log price model: residual')
+    # plt.show()
 
     # 多元回归找不显著变量
     # x_origin = sm.add_constant(x_origin)
