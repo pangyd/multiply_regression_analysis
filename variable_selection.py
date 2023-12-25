@@ -29,8 +29,8 @@ pd.set_option("display.max_row", None)
 def args_parse():
     parse = argparse.ArgumentParser("波士顿房价--多元回归模型")
     parse.add_argument("--data_path", type=str, default="./HousingData.csv", help="原始数据文件路径")
-    parse.add_argument("--y_transformation", type=str, default="log", help="对y进行转换的形式（函数）, [log, square, None]")
-    parse.add_argument("--handle_nan", type=str, default="nearest_interpolate", help="插值方法，[drop, interpolate, drop]")
+    parse.add_argument("--y_transformation", type=str, default="log", help="对y进行转换的形式（函数）")
+    parse.add_argument("--handle_nan", type=str, default="nearest_interpolate", help="插值方法，[drop, nearest_interpolate, mean_mode_interpolate]")
     parse.add_argument("--outlier_type", type=str, default="DEFITS", help="求异常值的方法，[DEFITS, abs_t, D]")
     parse.add_argument("--select_criteria", type=str, default="p_value", help="前向逐步回归中进行变量筛选的指标，[p_value, AIC]")
     args = parse.parse_args()
@@ -74,17 +74,29 @@ class Preprocess():
         # DEFITS > 1: [365, 366, 368, 369, 372, 373, 375, 402, 406, 411, 413]
         if outlier_type == "DEFITS":
             outlier_index = [365, 366, 368, 369, 372, 373, 375, 402, 406, 411, 413]
-            data = data.drop(outlier_index, axis=0)
+            mid_list = []
+            for outlier in outlier_index:
+                if outlier in data.index:
+                    mid_list.append(outlier)
+            data = data.drop(mid_list, axis=0)
             data.index = range(len(data))
         # abs(t) > 2.5: [369, 372, 373, 401, 402, 413]
         if outlier_type == "abs_t":
             outlier_index = [369, 372, 373, 401, 402, 413]
-            data = data.drop(outlier_index, axis=0)
+            mid_list = []
+            for outlier in outlier_index:
+                if outlier in data.index:
+                    mid_list.append(outlier)
+            data = data.drop(mid_list, axis=0)
             data.index = range(len(data))
         # D > 0.05: [366, 368, 369, 402, 406, 411, 413]
         if outlier_type == "D":
             outlier_index = [366, 368, 369, 402, 406, 411, 413]
-            data = data.drop(outlier_index, axis=0)
+            mid_list = []
+            for outlier in outlier_index:
+                if outlier in data.index:
+                    mid_list.append(outlier)
+            data = data.drop(mid_list, axis=0)
             data.index = range(len(data))
         if outlier_type is None:
             return data
@@ -96,7 +108,7 @@ class Preprocess():
         y = data[columns[-1]]
         x = s.fit_transform(x)
         logging.info(f"各变量样本均值：{[round(m, 4) for m in list(s.mean_)]}")
-        logging.info(f"各变量样本均值：{[round(v, 4) for v in list(s.var_)]}")
+        logging.info(f"各变量样本方差：{[round(v, 4) for v in list(s.var_)]}")
         x = pd.DataFrame(x, columns=columns[:-1])
         x["MEDV"] = y
         return x
@@ -477,8 +489,8 @@ def main():
     logging.info("\n")
     data = preprocess.y_transformation(data)
     origin_data = deepcopy(data)
-    data.to_csv("./after_preprocess2.csv", columns=data.columns, encoding="utf-8")
-    data = pd.read_csv("../linear_regression/after_preprocess2.csv", index_col=0, header=0)
+    # data.to_csv("./after_preprocess2.csv", columns=data.columns, encoding="utf-8")
+    # data = pd.read_csv("../linear_regression/after_preprocess2.csv", index_col=0, header=0)
     x_origin = origin_data[origin_data.columns[:-1]]
     Y = origin_data[origin_data.columns[-1]]
 
